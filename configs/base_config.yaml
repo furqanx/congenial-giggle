@@ -1,0 +1,65 @@
+# ==========================================
+# HYBRID ASR CONFIGURATION (HDF5 + PyTorch Native)
+# ==========================================
+
+# --- 1. EXPERIMENT INFO ---
+experiment:
+  project_name : "wavlm-bilstm-hybrid-v1"
+  seed         : 42              
+  output_dir   : "./logs/experiments"
+
+# --- 2. DATA PIPELINE (HDF5 Storage) ---
+data:
+  # Path ke file manifest JSONL
+  train_manifest  : "data/processed/train_word_transcripts.jsonl"
+  val_manifest    : "data/processed/val_word_transcripts.jsonl"
+  
+  # Path ke brankas HDF5 (Hasil dari extract_embeddings.py)
+  h5_train_path   : "data/processed/embeddings/train_wavlm.h5"
+  h5_val_path     : "data/processed/embeddings/val_wavlm.h5"
+  
+  # Batch Size bisa dinaikkan sedikit karena vektor lebih ringan dari audio mentah
+  batch_size      : 16
+  num_workers     : 4       
+  max_duration    : 15.0
+
+# --- 3. MODEL ARCHITECTURE (The Hybrid Core) ---
+model:
+  # Pilihan: "bilstm" (Cepat & Stabil) atau "conformer" (Berat & SOTA)
+  encoder_type    : "bilstm"
+  
+  # Dimensi Input (WavLM/HuBERT Base = 768)
+  input_dim       : 768
+  
+  # Konfigurasi Encoder
+  hidden_dim      : 512
+  num_enc_layers  : 3
+  
+  # Konfigurasi Decoder (Transformer)
+  decoder_hidden_dim : 512
+  num_heads       : 8
+  num_dec_layers  : 2
+  
+  # Regularisasi
+  dropout         : 0.1
+
+# --- 4. TRAINING HYPERPARAMETERS ---
+train:
+  epochs       : 20
+  learning_rate: 3e-4     
+  optimizer    : "adamw"  
+  weight_decay : 0.005    
+  
+  # Kalibrasi Hybrid Loss (30% CTC, 70% Attention)
+  ctc_weight   : 0.3
+
+  # Mixed Precision (Sangat disarankan untuk mempercepat training)
+  fp16: True
+  
+  # Real Batch Size = batch_size (16) * accum_steps (2) = 32
+  gradient_accumulation_steps: 2
+  
+  device       : "cuda"
+  
+  logging_steps : 100     
+  save_total_limit: 2

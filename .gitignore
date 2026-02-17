@@ -1,0 +1,15 @@
+LICENSE
+setup.cfg
+
+# both this is for local only
+logs/
+data/
+# models/ 
+
+# Abaikan folder data & output
+__pycache__/
+*.pyc
+
+# Abaikan file konfigurasi sistem/env
+.DS_Store
+.ipynb_checkpoints/
