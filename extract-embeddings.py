@@ -2,7 +2,7 @@ import os
 import torch
 import torchaudio
 import numpy as np
-import h5py  # <--- Senjata rahasia kita
+import h5py  
 from tqdm import tqdm
 from transformers import AutoFeatureExtractor, AutoModel, WhisperModel
 
