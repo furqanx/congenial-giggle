@@ -114,13 +114,20 @@ def main():
         else:
             gagal += 1
             
+        # ==========================================
+        # TAKTIK BUMI HANGUS (PENGHEMATAN DISK LOKAL)
+        # Hapus file mentah aslinya terlepas dari sukses atau gagalnya VAD
+        # ==========================================
+        if os.path.exists(original_audio_path):
+            os.remove(original_audio_path)
+            
     # Simpan JSONL baru yang sudah diperbarui
     with open(CLEAN_JSONL_PATH, 'w', encoding='utf-8') as f:
         for item in clean_manifest:
             f.write(json.dumps(item) + '\n')
             
     print("\n✅ PABRIK SELESAI BEKERJA!")
-    print(f"📊 Laporan: {sukses} file berhasil dibersihkan, {gagal} file diabaikan/gagal.")
+    print(f"📊 Laporan: {sukses} file berhasil dibersihkan, {gagal} file diabaikan/gagal (dan file aslinya telah dihapus).")
     print(f"📁 Folder MFA Corpus Anda siap di: {CLEAN_OUTPUT_DIR}")
 
 if __name__ == "__main__":
