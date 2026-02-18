@@ -11,14 +11,12 @@ from silero_vad import load_silero_vad
 # ==========================================
 # 1. PENGATURAN LOGISTIK (PATHS)
 # ==========================================
-# Sesuaikan path ini dengan direktori di Colab/Kaggle Anda
 RAW_AUDIO_DIR = "/content/congenial-giggle/data/raw/audio"
 RAW_JSONL_PATH = "/content/congenial-giggle/data/raw/train_transcripts.jsonl"
 
-CLEAN_OUTPUT_DIR = "/content/congenial-giggle/data/processed/mfa_corpus"
-CLEAN_JSONL_PATH = "/content/congenial-giggle/data/processed/clean_train_transcripts.jsonl"
+CLEAN_OUTPUT_DIR = "/content/drive/MyDrive/LAB-AI/childs_speaker_recognition/mfa_corpus"
+CLEAN_JSONL_PATH = "/content/drive/MyDrive/LAB-AI/childs_speaker_recognition/clean_train_transcripts.jsonl"
 
-# Buat folder output jika belum ada
 os.makedirs(CLEAN_OUTPUT_DIR, exist_ok=True)
 
 # ==========================================
@@ -30,7 +28,7 @@ def crop_and_concat_audio(audio_path, timestamps, target_sr=16000):
     dan menggabungkannya kembali menjadi satu audio yang padat (tanpa jeda hening).
     """
     try:
-        # Load audio mentah (ingat, data train Anda format channel dan SR-nya berantakan)
+        # Load audio mentah
         wav, sr = torchaudio.load(audio_path)
         
         # Penyeragaman Otomatis: Ubah ke Mono jika Stereo
@@ -46,7 +44,7 @@ def crop_and_concat_audio(audio_path, timestamps, target_sr=16000):
         if not timestamps:
             return None, sr
 
-        # Gunting audio berdasarkan stempel waktu (diubah dari detik ke index sampel)
+        # Gunting audio berdasarkan stempel waktu
         speech_segments = []
         for t in timestamps:
             start_sample = int(t['start'] * sr)
@@ -67,11 +65,9 @@ def crop_and_concat_audio(audio_path, timestamps, target_sr=16000):
 def main():
     print("🚀 Memulai Pabrik Pembersihan Data (VAD & MFA Prep)...")
     
-    # Load model Silero VAD HANYA SEKALI untuk menghemat RAM/VRAM
     print("🤖 Memuat Model Silero VAD ke memori...")
     vad_model = load_silero_vad()
     
-    # Buka buku daftar (JSONL mentah)
     with open(RAW_JSONL_PATH, 'r', encoding='utf-8') as f:
         lines = f.readlines()
         
@@ -79,16 +75,18 @@ def main():
     gagal = 0
     clean_manifest = []
 
-    # Mulai proses ban berjalan dengan progress bar (tqdm)
     print(f"📦 Ditemukan {len(lines)} file untuk diproses. Memulai pemotongan...")
     for line in tqdm(lines, desc="Processing Audio"):
         data = json.loads(line)
         
-        file_id = data['id']
-        original_audio_path = os.path.join(RAW_AUDIO_DIR, f"{file_id}.flac")
-        transcript_text = data['text']
+        # === PERBAIKAN ATRIBUT JSON ===
+        file_id = data['utterance_id']
+        transcript_text = data['orthographic_text']
+        # ==============================
         
-        # Langkah A: Pindai audio dengan Radar VAD
+        original_audio_path = os.path.join(RAW_AUDIO_DIR, f"{file_id}.flac")
+        
+        # Langkah A: Pindai audio dengan VAD
         timestamps = apply_silero_vad(original_audio_path, vad_model)
         
         # Langkah B: Gunting dan Padatkan
@@ -110,7 +108,7 @@ def main():
                 txt_file.write(transcript_text)
                 
             # Langkah E: Catat di buku daftar (JSONL) baru
-            data['audio_path'] = new_audio_path # Update path ke file yang baru
+            data['audio_path'] = new_audio_path 
             clean_manifest.append(data)
             sukses += 1
         else:
