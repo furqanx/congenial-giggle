@@ -2,15 +2,12 @@ import torch
 import torch.nn as nn
 import torchaudio
 import math
+from transformers import AutoModel
 
 # ==========================================
 # BLOK 0: KOMPONEN PENDUKUNG
 # ==========================================
 class PositionalEncoding(nn.Module):
-    """
-    Suntikan pemahaman urutan waktu (Time-Awareness) untuk Transformer Decoder.
-    Karena Transformer membaca semua sekaligus, ia butuh "stempel waktu" di setiap kata.
-    """
     def __init__(self, d_model, dropout=0.1, max_len=5000):
         super().__init__()
         self.dropout = nn.Dropout(p=dropout)
@@ -22,12 +19,11 @@ class PositionalEncoding(nn.Module):
         self.register_buffer('pe', pe)
 
     def forward(self, x):
-        # x shape: (Batch, Waktu, Dimensi)
-        x = x + self.pe[:x.size(1)].transpose(0, 1)
+        x = x + self.pe[:x.size(1), 0, :]
         return self.dropout(x)
 
 # ==========================================
-# BLOK 1: ENCODERS (Sang Pengekstrak Fitur Akustik)
+# BLOK 1: THE BRAIN (Contextual Encoders)
 # ==========================================
 class BiLSTMEncoder(nn.Module):
     def __init__(self, input_dim=768, hidden_dim=512, num_layers=3, dropout=0.1):
@@ -40,7 +36,7 @@ class BiLSTMEncoder(nn.Module):
             dropout=dropout if num_layers > 1 else 0.0,
             bidirectional=True
         )
-        self.output_dim = hidden_dim * 2 # Karena Bidirectional (Maju + Mundur)
+        self.output_dim = hidden_dim * 2
 
     def forward(self, x, lengths=None):
         out, _ = self.lstm(x)
@@ -49,7 +45,6 @@ class BiLSTMEncoder(nn.Module):
 class ConformerEncoder(nn.Module):
     def __init__(self, input_dim=768, num_heads=8, ffn_dim=1024, num_layers=4, dropout=0.1):
         super().__init__()
-        # Menggunakan Conformer bawaan Torchaudio yang sangat teroptimasi
         self.conformer = torchaudio.models.Conformer(
             input_dim=input_dim,
             num_heads=num_heads,
@@ -58,15 +53,14 @@ class ConformerEncoder(nn.Module):
             depthwise_conv_kernel_size=31,
             dropout=dropout
         )
-        self.output_dim = input_dim # Conformer mempertahankan dimensi input
+        self.output_dim = input_dim
 
     def forward(self, x, lengths):
-        # Conformer Torchaudio butuh informasi panjang masing-masing audio dalam batch
         out, _ = self.conformer(x, lengths)
         return out
 
 # ==========================================
-# BLOK 2: DECODER (Sang Model Bahasa / Ahli Tata Bahasa)
+# BLOK 2: THE TRANSLATOR (Decoder)
 # ==========================================
 class TransformerDecoderModule(nn.Module):
     def __init__(self, vocab_size, encoder_dim, hidden_dim=512, num_heads=8, num_layers=2, dropout=0.1):
@@ -83,17 +77,11 @@ class TransformerDecoderModule(nn.Module):
         )
         self.decoder = nn.TransformerDecoder(decoder_layer, num_layers=num_layers)
         
-        # Jembatan penyesuai dimensi antara Encoder (Misal: 1024) ke Decoder (512)
         self.encoder_proj = nn.Linear(encoder_dim, hidden_dim) if encoder_dim != hidden_dim else nn.Identity()
         self.output_proj = nn.Linear(hidden_dim, vocab_size)
 
     def forward(self, tgt, memory, tgt_mask=None, tgt_pad_mask=None):
-        # tgt: Teks (Batch, Panjang Teks)
-        # memory: Output dari Encoder (Batch, Waktu, Dimensi)
-        
-        tgt_emb = self.embedding(tgt) 
-        tgt_emb = self.pos_encoder(tgt_emb)
-        
+        tgt_emb = self.pos_encoder(self.embedding(tgt))
         memory_proj = self.encoder_proj(memory) 
         
         out = self.decoder(
@@ -102,44 +90,54 @@ class TransformerDecoderModule(nn.Module):
             tgt_mask=tgt_mask,
             tgt_key_padding_mask=tgt_pad_mask
         )
-        
         return self.output_proj(out)
 
 # ==========================================
-# BLOK 3: CANGKANG UTAMA (The Hybrid Wrapper)
+# BLOK 3: THE END-TO-END HYBRID CANGKANG (WavLM + Encoder + Decoder)
 # ==========================================
-class HybridASRModel(nn.Module):
+class EndToEndHybridASR(nn.Module):
     def __init__(self, vocab_size, pad_token_id, config):
         super().__init__()
         self.pad_token_id = pad_token_id
         
+        # --- 1. THE EARS: WavLM/Wav2Vec2 Backbone ---
+        backbone_name = config.get("backbone", "microsoft/wavlm-base-plus")
+        print(f"[Model Factory] Mengunduh/Memuat Telinga Bionik: {backbone_name}")
+        self.backbone = AutoModel.from_pretrained(backbone_name)
+        
+        if config.get("freeze_backbone", False):
+            print("[Model Factory] Membekukan bobot Backbone (Feature Extraction Mode)")
+            for param in self.backbone.parameters():
+                param.requires_grad = False
+        
+        # Ambil dimensi output bawaan dari backbone (biasanya 768 untuk base model)
+        backbone_dim = self.backbone.config.hidden_size
+        
+        # --- 2. THE BRAIN: Contextual Encoder ---
         encoder_type = config.get("encoder_type", "bilstm").lower()
-        input_dim = config.get("input_dim", 768) # Dimensi WavLM/HuBERT
+        print(f"[Model Factory] Merakit Otak: {encoder_type.upper()}")
         
-        print(f"[Model Factory] Merakit senjata: {encoder_type.upper()} + Transformer Decoder")
-        
-        # 1. SETUP ENCODER
         if encoder_type == "bilstm":
             self.encoder = BiLSTMEncoder(
-                input_dim=input_dim, 
+                input_dim=backbone_dim, 
                 hidden_dim=config.get("hidden_dim", 512), 
                 num_layers=config.get("num_enc_layers", 3),
                 dropout=config.get("dropout", 0.1)
             )
         elif encoder_type == "conformer":
             self.encoder = ConformerEncoder(
-                input_dim=input_dim,
+                input_dim=backbone_dim,
                 num_heads=config.get("num_heads", 8),
                 num_layers=config.get("num_enc_layers", 4),
                 dropout=config.get("dropout", 0.1)
             )
         else:
-            raise ValueError("encoder_type di config.yaml harus 'bilstm' atau 'conformer'")
+            raise ValueError("encoder_type harus 'bilstm' atau 'conformer'")
             
-        # 2. CTC HEAD (Jalur Tembakan Pertama)
+        # --- 3. CTC HEAD ---
         self.ctc_head = nn.Linear(self.encoder.output_dim, vocab_size)
         
-        # 3. ATTENTION DECODER (Jalur Tembakan Kedua)
+        # --- 4. ATTENTION DECODER ---
         self.decoder = TransformerDecoderModule(
             vocab_size=vocab_size, 
             encoder_dim=self.encoder.output_dim,
@@ -149,36 +147,37 @@ class HybridASRModel(nn.Module):
             dropout=config.get("dropout", 0.1)
         )
 
-    def forward(self, input_values, input_lengths, target_tokens=None):
+    def forward(self, input_values, target_tokens=None):
         """
-        input_values: (Batch, Max_Time, 768) - Dari HDF5 Dataloader
-        input_lengths: (Batch) - Panjang waktu asli sebelum di-padding
-        target_tokens: (Batch, Max_Text_Len) - Teks transcript untuk melatih Decoder
+        input_values: Audio gelombang mentah (Batch Size, Panjang Audio)
+        target_tokens: Teks transcript (Batch Size, Max_Text_Len)
         """
+        # --- 1. JALUR BACKBONE (Audio -> Vektor) ---
+        # WavLM otomatis membuang padding dan mengekstrak fitur
+        outputs = self.backbone(input_values)
+        acoustic_features = outputs.last_hidden_state # Shape: (Batch Size, Waktu, 768)
         
-        # --- 1. JALUR ENCODER ---
+        # Karena kita menggunakan WavLM via HuggingFace tanpa padding mask khusus, 
+        # kita estimasikan panjang sequence penuh untuk input ke encoder.
+        batch_size, seq_len, _ = acoustic_features.size()
+        input_lengths = torch.full((batch_size,), seq_len, dtype=torch.long, device=input_values.device)
+        
+        # --- 2. JALUR ENCODER ---
         if isinstance(self.encoder, ConformerEncoder):
-            memory = self.encoder(input_values, input_lengths)
+            memory = self.encoder(acoustic_features, input_lengths)
         else:
-            memory = self.encoder(input_values)
+            memory = self.encoder(acoustic_features)
             
-        # --- 2. JALUR CTC ---
-        # Logits ini akan dimakan oleh nn.CTCLoss nanti di trainer.py
+        # --- 3. JALUR CTC ---
         ctc_logits = self.ctc_head(memory) 
         
-        # --- 3. JALUR ATTENTION (Hanya jalan saat Training / target_tokens ada) ---
+        # --- 4. JALUR ATTENTION DECODER ---
         decoder_logits = None
         if target_tokens is not None:
-            # Cegah model "mencontek" kata di masa depan menggunakan Causal Mask
             tgt_seq_len = target_tokens.size(1)
             tgt_mask = nn.Transformer.generate_square_subsequent_mask(tgt_seq_len).to(input_values.device)
             
-            # Buat Pad Mask agar padding teks (token -100) diabaikan oleh Attention
-            tgt_pad_mask = (target_tokens == self.pad_token_id)
-            # Karena Dataloader kita mengubah pad menjadi -100, kita tangani juga
-            tgt_pad_mask = tgt_pad_mask | (target_tokens == -100)
-            
-            # Ubah -100 kembali ke pad_token_id agar tidak crash saat masuk layer Embedding
+            tgt_pad_mask = (target_tokens == self.pad_token_id) | (target_tokens == -100)
             safe_target_tokens = target_tokens.masked_fill(target_tokens == -100, self.pad_token_id)
             
             decoder_logits = self.decoder(
@@ -188,18 +187,17 @@ class HybridASRModel(nn.Module):
                 tgt_pad_mask=tgt_pad_mask
             )
             
-        return {"ctc_logits": ctc_logits, "decoder_logits": decoder_logits}
+        return {"ctc_logits": ctc_logits, "decoder_logits": decoder_logits, "input_lengths": input_lengths}
 
 # ==========================================
-# FACTORY FUNCTION (Untuk dipanggil di main.py / trainer.py)
+# FACTORY FUNCTION
 # ==========================================
 def build_model(config, processor):
     vocab_size = len(processor.tokenizer)
     pad_token_id = processor.tokenizer.pad_token_id
     
-    model = HybridASRModel(vocab_size=vocab_size, pad_token_id=pad_token_id, config=config)
+    model = EndToEndHybridASR(vocab_size=vocab_size, pad_token_id=pad_token_id, config=config)
     
-    # Cetak parameter untuk laporan intelijen
     trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     print(f"📊 Total Senjata (Trainable Parameters): {trainable_params:,}")
     

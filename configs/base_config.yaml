@@ -1,41 +1,40 @@
 # ==========================================
-# HYBRID ASR CONFIGURATION (HDF5 + PyTorch Native)
+# END-TO-END HYBRID ASR CONFIGURATION (Raw Audio -> WavLM -> Decoder)
 # ==========================================
 
 # --- 1. EXPERIMENT INFO ---
 experiment:
-  project_name : "wavlm-bilstm-hybrid-v1"
+  project_name : "wavlm-hybrid-asr-v1"
   seed         : 42              
   output_dir   : "./logs/experiments"
 
-# --- 2. DATA PIPELINE (HDF5 Storage) ---
+# --- 2. DATA PIPELINE (Raw Audio + Manifest) ---
 data:
-  # Path ke file manifest JSONL
-  train_manifest  : "data/processed/train_word_transcripts.jsonl"
-  val_manifest    : "data/processed/val_word_transcripts.jsonl"
+  # Path diarahkan langsung ke file Colab yang sudah di-remap
+  train_manifest  : "/content/data/processed/train_manifest_colab.jsonl"
+  val_manifest    : "/content/data/processed/val_manifest_colab.jsonl"
   
-  # Path ke brankas HDF5 (Hasil dari extract_embeddings.py)
-  h5_train_path   : "data/processed/embeddings/train_wavlm.h5"
-  h5_val_path     : "data/processed/embeddings/val_wavlm.h5"
+  sample_rate     : 16000
   
-  # Batch Size bisa dinaikkan sedikit karena vektor lebih ringan dari audio mentah
-  batch_size      : 16
-  num_workers     : 4       
+  # Batch Size DITURUNKAN dari 16 ke 8. 
+  # Karena sekarang kita memuat raw audio & WavLM langsung ke GPU, butuh VRAM lebih besar.
+  batch_size      : 8
+  num_workers     : 4 
   max_duration    : 15.0
 
 # --- 3. MODEL ARCHITECTURE (The Hybrid Core) ---
 model:
-  # Pilihan: "bilstm" (Cepat & Stabil) atau "conformer" (Berat & SOTA)
+  # The "Ears" (Acoustic Feature Extractor)
+  backbone        : "microsoft/wavlm-base-plus"
+  freeze_backbone : False    # Set True di awal jika GPU Colab sering OOM
+  
+  # The "Brain" (Encoder)
   encoder_type    : "bilstm"
-  
-  # Dimensi Input (WavLM/HuBERT Base = 768)
-  input_dim       : 768
-  
-  # Konfigurasi Encoder
+  input_dim       : 768      # Sesuai output WavLM Base
   hidden_dim      : 512
   num_enc_layers  : 3
   
-  # Konfigurasi Decoder (Transformer)
+  # The "Translator" (Decoder)
   decoder_hidden_dim : 512
   num_heads       : 8
   num_dec_layers  : 2
@@ -46,20 +45,19 @@ model:
 # --- 4. TRAINING HYPERPARAMETERS ---
 train:
   epochs       : 20
-  learning_rate: 3e-4     
+  # Learning rate diturunkan sedikit (dari 3e-4 ke 1e-4) karena kita sekarang ikut men-training WavLM
+  learning_rate: 1e-4     
   optimizer    : "adamw"  
   weight_decay : 0.005    
   
   # Kalibrasi Hybrid Loss (30% CTC, 70% Attention)
   ctc_weight   : 0.3
 
-  # Mixed Precision (Sangat disarankan untuk mempercepat training)
   fp16: True
   
-  # Real Batch Size = batch_size (16) * accum_steps (2) = 32
-  gradient_accumulation_steps: 2
+  # Real Batch Size = batch_size (8) * accum_steps (4) = 32
+  gradient_accumulation_steps: 4
   
   device       : "cuda"
-  
   logging_steps : 100     
   save_total_limit: 2

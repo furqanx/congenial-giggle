@@ -131,7 +131,7 @@ def main(args):
     # Simpan bobot (weights) model murni ala PyTorch
     torch.save(model.state_dict(), os.path.join(final_save_path, "pytorch_model.bin"))
     
-    # Simpan Processor (Ini masih aman karena kita buatkan CustomProcessor)
+    # Simpan Processor (HuggingFace Wav2Vec2Processor mendukung save_pretrained secara native)
     processor.save_pretrained(final_save_path)
     
     print(f"✅ Model PyTorch & Processor diamankan di: {final_save_path}")

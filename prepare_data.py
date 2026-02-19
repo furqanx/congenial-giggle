@@ -11,11 +11,11 @@ from silero_vad import load_silero_vad
 # ==========================================
 # 1. PENGATURAN LOGISTIK (PATHS)
 # ==========================================
-RAW_AUDIO_DIR = "/content/congenial-giggle/data/raw/audio"
-RAW_JSONL_PATH = "/content/congenial-giggle/data/raw/train_transcripts.jsonl"
+RAW_AUDIO_DIR    = "data/raw/audio"
+RAW_JSONL_PATH   = "data/processed/train_split.jsonl"
 
-CLEAN_OUTPUT_DIR = "/content/drive/MyDrive/LAB-AI/childs_speaker_recognition/mfa_corpus"
-CLEAN_JSONL_PATH = "/content/drive/MyDrive/LAB-AI/childs_speaker_recognition/clean_train_transcripts.jsonl"
+CLEAN_OUTPUT_DIR = "data/interim/mfa_corpus_train"
+CLEAN_JSONL_PATH = "data/interim/clean_train_transcripts.jsonl"
 
 os.makedirs(CLEAN_OUTPUT_DIR, exist_ok=True)
 
@@ -118,8 +118,8 @@ def main():
         # TAKTIK BUMI HANGUS (PENGHEMATAN DISK LOKAL)
         # Hapus file mentah aslinya terlepas dari sukses atau gagalnya VAD
         # ==========================================
-        if os.path.exists(original_audio_path):
-            os.remove(original_audio_path)
+        # if os.path.exists(original_audio_path):
+        #     os.remove(original_audio_path)
             
     # Simpan JSONL baru yang sudah diperbarui
     with open(CLEAN_JSONL_PATH, 'w', encoding='utf-8') as f:
@@ -127,7 +127,7 @@ def main():
             f.write(json.dumps(item) + '\n')
             
     print("\n✅ PABRIK SELESAI BEKERJA!")
-    print(f"📊 Laporan: {sukses} file berhasil dibersihkan, {gagal} file diabaikan/gagal (dan file aslinya telah dihapus).")
+    print(f"📊 Laporan: {sukses} file berhasil dibersihkan, {gagal} file diabaikan/gagal")
     print(f"📁 Folder MFA Corpus Anda siap di: {CLEAN_OUTPUT_DIR}")
 
 if __name__ == "__main__":
