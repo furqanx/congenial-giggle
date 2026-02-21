@@ -13,6 +13,8 @@ data:
   # Path diarahkan langsung ke file Colab yang sudah di-remap
   train_manifest  : "/content/data/processed/train_manifest_colab.jsonl"
   val_manifest    : "/content/data/processed/val_manifest_colab.jsonl"
+
+  noise_dir       : "content/data/noise"
   
   sample_rate     : 16000
   

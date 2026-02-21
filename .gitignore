@@ -13,6 +13,7 @@ __pycache__/
 # Abaikan file konfigurasi sistem/env
 .DS_Store
 .ipynb_checkpoints/
+notebooks/
 
 # file python yang tidak usah diupload ke GPU
 /apply_vad.py
