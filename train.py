@@ -8,14 +8,15 @@ import torch
 import torch.optim as optim
 from transformers import get_linear_schedule_with_warmup
 
-# --- Import Modul Custom Kita ---
 from src.dataloader import get_dataloader
 from src.processor import get_processor
 from src.model import build_model
-from src.trainer import ASRTrainer # Pastikan nama class di src/trainer.py adalah ASRTrainer
+from src.trainer import ASRTrainer 
 
 def set_seed(seed):
-    """Mengatur seed agar hasil eksperimen bisa direproduksi (reproducible)."""
+    """
+    Mengatur seed agar hasil eksperimen bisa direproduksi (reproducible).
+    """
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)

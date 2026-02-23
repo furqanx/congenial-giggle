@@ -20,8 +20,8 @@ data:
   
   # Batch Size DITURUNKAN dari 16 ke 8. 
   # Karena sekarang kita memuat raw audio & WavLM langsung ke GPU, butuh VRAM lebih besar.
-  batch_size      : 8
-  num_workers     : 4 
+  batch_size      : 32
+  num_workers     : 8 
   max_duration    : 15.0
 
 # --- 3. MODEL ARCHITECTURE (The Hybrid Core) ---
