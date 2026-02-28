@@ -28,6 +28,7 @@ def set_seed(seed):
     print(f"[Setup] Seed set to: {seed}")
 
 def main(args):
+
     # ====================================================
     # 1. SETUP & CONFIGURATION
     # ====================================================
@@ -35,11 +36,11 @@ def main(args):
     with open(args.config, 'r') as f:
         config = yaml.safe_load(f)
 
-    # Buat folder output eksperimen
+    # buat folder output eksperimen
     output_dir = os.path.join(config['experiment']['output_dir'], config['experiment']['project_name'])
     os.makedirs(output_dir, exist_ok=True)
     
-    # Simpan config yang dipakai sebagai arsip
+    # simpan config yang dipakai sebagai arsip
     with open(os.path.join(output_dir, "config_saved.yaml"), "w") as f:
         yaml.dump(config, f)
 
@@ -47,22 +48,26 @@ def main(args):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"[Main] Device: {device}")
 
+
     # ====================================================
     # 2. PREPARE PROCESSOR (VOCAB & TOKENIZER)
     # ====================================================
     processor = get_processor(config)
-    
+
+
     # ====================================================
     # 3. DATA PIPELINE
     # ====================================================
     train_loader, val_loader = get_dataloader(config['data'], processor)
     print(f"[Main] Data loaded. Train batches: {len(train_loader)}, Val batches: {len(val_loader)}")
 
+
     # ====================================================
     # 4. BUILD MODEL
     # ====================================================
     model = build_model(config['model'], processor)
     model.to(device)
+
 
     # ====================================================
     # 5. OPTIMIZER & SCHEDULER
@@ -95,6 +100,7 @@ def main(args):
     
     print(f"[Optimizer] Total Steps: {max_train_steps} | Warmup Steps: {warmup_steps}")
 
+
     # ====================================================
     # 6. INITIALIZE TRAINER
     # ====================================================
@@ -109,6 +115,7 @@ def main(args):
         processor=processor  # Penting untuk decoding saat validasi (WER/CER)
     )
 
+
     # ====================================================
     # 7. START TRAINING Loop
     # ====================================================
@@ -121,6 +128,7 @@ def main(args):
     except KeyboardInterrupt:
         print("\n[Main] Training interrupted by user. Saving current state...")
     
+
     # ====================================================
     # 8. SAVE FINAL MODEL
     # ====================================================

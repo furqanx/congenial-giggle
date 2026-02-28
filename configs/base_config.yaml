@@ -27,7 +27,10 @@ data:
 # --- 3. MODEL ARCHITECTURE (The Hybrid Core) ---
 model:
   # The "Ears" (Acoustic Feature Extractor)
-  backbone        : "microsoft/wavlm-base-plus"
+  backbone        : "microsoft/wavlm-base-plus"       # Ringan, cocok untuk eksperimen awal
+  # backbone      : "microsoft/wavlm-large"           # Akurasi tinggi, butuh VRAM besar
+  # backbone      : "facebook/wav2vec2-large-xlsr-53" # Sangat bagus untuk fonem IPA
+  # backbone      : "facebook/hubert-large-ls960-ft"  # Sangat stabil
   freeze_backbone : False    # Set True di awal jika GPU Colab sering OOM
   
   # The "Brain" (Encoder)

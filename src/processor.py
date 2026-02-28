@@ -51,7 +51,7 @@ def get_processor(config):
     """
     save_dir = os.path.join(config['experiment']['output_dir'], "processor")
     
-    # PERBAIKAN: Tambahkan Feature Extractor untuk membersihkan & menormalisasi Audio
+    # Tambahkan Feature Extractor untuk membersihkan & menormalisasi Audio
     feature_extractor = Wav2Vec2FeatureExtractor(
         feature_size=1, 
         sampling_rate=config['data']['sample_rate'], 
