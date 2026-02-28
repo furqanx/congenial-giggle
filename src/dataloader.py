@@ -35,9 +35,12 @@ class DataCollatorCTCWithPadding:
             return_tensors="pt",
         )
 
-        labels = labels_batch["input_ids"].masked_fill(
-            labels_batch.attention_mask.ne(1), -100
-        )
+        # labels = labels_batch["input_ids"].masked_fill(
+        #     labels_batch.attention_mask.ne(1), -100
+        # )
+
+        labels = labels_batch["input_ids"]
+        labels = labels.masked_fill(labels == self.processor.tokenizer.pad_token_id, -100)
 
         batch["labels"] = labels
         return batch
@@ -119,7 +122,7 @@ class ASRDataset(Dataset):
 
 def filter_data(df, min_duration=0.5, max_duration=15.0):
     if 'duration' in df.columns:
-        return df[(df['duration'] >= min_duration) & (df['duration'] <= max_duration)]
+        return df[(df['duration'] >= min_duration) & (df['duration'] <= max_duration)].reset_index(drop=True)
     return df
 
 # ==========================================
