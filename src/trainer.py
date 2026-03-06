@@ -1,8 +1,7 @@
 import torch
-import torch.nn as nn
 import os
 from tqdm.auto import tqdm
-from src.utils.metrics import compute_asr_metrics # Pastikan file ini ada
+from src.utils.metrics import compute_asr_metrics 
 
 class ASRTrainer:
     def __init__(self, model, train_loader, val_loader, optimizer, scheduler, device, config, processor):
@@ -22,26 +21,13 @@ class ASRTrainer:
         self.scaler = torch.amp.GradScaler() if torch.cuda.is_available() else None
         self.accum_steps = config['train'].get('gradient_accumulation_steps', 1)
 
-        # ==========================================
-        # SISTEM PEMBIDIK (LOSS FUNCTIONS)
-        # ==========================================
         self.pad_id = self.processor.tokenizer.pad_token_id
-        
-        # 1. CTC Loss
-        # zero_infinity=True mencegah inf/nan jika ada label yang lebih panjang dari output audio
-        self.ctc_loss_fn = nn.CTCLoss(blank=self.pad_id, zero_infinity=True)
-        
-        # 2. Attention Loss
-        # ignore_index=-100 agar token padding tidak dipenalti
-        self.attn_loss_fn = nn.CrossEntropyLoss(label_smoothing=0.1, ignore_index=-100)
-        
-        self.alpha = config['train'].get('ctc_weight', 0.3)
 
     def train(self):
         epochs = self.config['train']['epochs']
         best_wer = float('inf')
         
-        print("\n[Trainer] Memulai Siklus Pelatihan...")
+        print("\n[Trainer] Memulai Siklus Pelatihan Murni CTC...")
         for epoch in range(epochs):
             train_loss = self._train_epoch(epoch)
             
@@ -71,35 +57,10 @@ class ASRTrainer:
             # Autocast untuk Mixed Precision (fp16)
             with torch.amp.autocast(device_type="cuda" if "cuda" in str(self.device) else "cpu", enabled=(self.scaler is not None)):
                 # --- TEMBAK KE MODEL ---
-                # Model akan mengembalikan logits dan panjang asli fiturnya
-                outputs = self.model(input_values, target_tokens=labels)
-                ctc_logits = outputs["ctc_logits"]       # Shape: (Batch, Waktu, Vocab)
-                decoder_logits = outputs["decoder_logits"] # Shape: (Batch, Teks, Vocab)
-                input_lengths = outputs["input_lengths"] # Shape: (Batch)
-
-                # --- 1. PERSIAPAN DATA UNTUK CTC LOSS ---
-                # CTC meminta logits ditranspose menjadi (Waktu, Batch, Vocab)
-                ctc_logits_t = ctc_logits.transpose(0, 1).log_softmax(2)
+                # Model akan otomatis menghitung CTC Loss karena kita memberikan argumen 'labels'
+                outputs = self.model(input_values=input_values, labels=labels)
                 
-                # Hitung panjang masing-masing teks tanpa menghitung padding (-100)
-                target_lengths = torch.sum(labels != -100, dim=1).long()
-                
-                # PyTorch CTC meminta label dalam bentuk 1D Array (tanpa padding sama sekali)
-                ctc_targets = labels[labels != -100]
-
-                # Hitung CTC Loss
-                loss_ctc = self.ctc_loss_fn(ctc_logits_t, ctc_targets, input_lengths, target_lengths)
-
-                # --- 2. PERSIAPAN DATA UNTUK ATTENTION LOSS ---
-                # Ratakan dimensi batch dan teks (Batch * Max_Teks, Vocab)
-                vocab_size = decoder_logits.size(-1)
-                flat_decoder_logits = decoder_logits.reshape(-1, vocab_size)
-                flat_labels = labels.reshape(-1)
-                
-                loss_attn = self.attn_loss_fn(flat_decoder_logits, flat_labels)
-
-                # --- 3. GABUNGKAN HYBRID LOSS ---
-                loss = (self.alpha * loss_ctc) + ((1 - self.alpha) * loss_attn)
+                loss = outputs["loss"]
                 loss = loss / self.accum_steps
 
             # Backward Pass menggunakan Scaler
@@ -138,8 +99,8 @@ class ASRTrainer:
                 input_values = batch['input_values'].to(self.device)
                 labels = batch['labels'].to(self.device)
                 
-                # Saat validasi, target_tokens harus None agar decoder memprediksi murni
-                outputs = self.model(input_values, target_tokens=None)
+                # Saat validasi, jangan beri label agar tidak menghitung loss
+                outputs = self.model(input_values=input_values)
                 ctc_logits = outputs["ctc_logits"]
                 
                 # --- DECODING CTC KASAR (Greedy) ---
@@ -155,7 +116,6 @@ class ASRTrainer:
                 all_preds.extend(pred_str)
                 all_labels.extend(label_str)
 
-        # Hitung skor WER/CER dari utils Anda
         metrics = compute_asr_metrics(all_preds, all_labels)
         return metrics
 

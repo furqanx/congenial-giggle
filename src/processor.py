@@ -1,7 +1,48 @@
 import os
+import re
 import json
 import pandas as pd
 from transformers import Wav2Vec2CTCTokenizer, Wav2Vec2FeatureExtractor, Wav2Vec2Processor
+import inflect
+
+p = inflect.engine()
+
+def normalize_text(text):
+    if not isinstance(text, str):
+        return ""
+    
+    text = text.lower()
+    
+    # 1. HAPUS ANGKA ANOTASI (misal: "running2" -> "running", "wrong2" -> "wrong")
+    # Regex ini mencari huruf yang langsung diikuti angka, dan membuang angkanya.
+    text = re.sub(r'([a-z]+)\d+', r'\1', text)
+    
+    # 2. SULAP ANGKA STANDALONE MENJADI KATA (misal: "90" -> "ninety", "2" -> "two")
+    def convert_num(match):
+        num_str = match.group()
+        word = p.number_to_words(num_str)
+        # Bersihkan strip dan koma bawaan inflect (misal: twenty-five -> twenty five)
+        word = word.replace('-', ' ').replace(',', '')
+        return " " + word + " "
+        
+    # Regex \b\d+\b hanya akan menangkap angka yang terpisah oleh spasi
+    text = re.sub(r'\b\d+\b', convert_num, text)
+        
+    # 3. Petakan karakter fonetik/aksen ke alfabet terdekat
+    char_map = {
+        'é': 'e', 'æ': 'ae', '\x92': "'", 
+        'ɑ': 'a', 'ɔ': 'o', 'ɜ': 'e', 'ɪ': 'i', 'ʊ': 'u', 'ʌ': 'u'
+    }
+    for k, v in char_map.items():
+        text = text.replace(k, v)
+        
+    # 4. Hapus SEMUA tanda baca (hanya sisakan huruf a-z dan spasi)
+    text = re.sub(r'[^a-z\s]', '', text)
+    
+    # 5. Rapikan spasi ganda menjadi spasi tunggal
+    text = re.sub(r'\s+', ' ', text).strip()
+    
+    return text
 
 def create_vocabulary_from_data(
         train_manifest_path, 
@@ -17,12 +58,12 @@ def create_vocabulary_from_data(
     df_val = pd.read_json(val_manifest_path, lines=True)
     
     # PERBAIKAN: Menggunakan key 'text' sesuai output MFA kita
-    all_text = pd.concat([df_train['text'], df_val['text']])
+    all_text = pd.concat([df_train['orthographic_text'], df_val['orthographic_text']])
 
     vocab_set = set()
     for text in all_text:
-        if isinstance(text, str):
-            vocab_set.update(list(text))
+        clean_text = normalize_text(text)  ###
+        vocab_set.update(list(text))
     
     vocab_dict = {v: k for k, v in enumerate(sorted(list(vocab_set)))}
     
@@ -32,8 +73,8 @@ def create_vocabulary_from_data(
     # --- PENTING: AMUNISI TOKEN SPESIAL ---
     vocab_dict["[UNK]"] = len(vocab_dict) # Unknown character
     vocab_dict["[PAD]"] = len(vocab_dict) # Padding (Juga berfungsi sebagai CTC Blank Token)
-    vocab_dict["<s>"] = len(vocab_dict)   # Start of Sentence (Wajib untuk Decoder)
-    vocab_dict["</s>"] = len(vocab_dict)  # End of Sentence (Wajib untuk Decoder)
+    # vocab_dict["<s>"] = len(vocab_dict)   # Start of Sentence (Wajib untuk Decoder) ##
+    # vocab_dict["</s>"] = len(vocab_dict)  # End of Sentence (Wajib untuk Decoder)   ##
 
     os.makedirs(output_dir, exist_ok=True)
     vocab_path = os.path.join(output_dir, "vocab.json")
@@ -76,8 +117,8 @@ def get_processor(config):
         vocab_path, 
         unk_token="[UNK]",
         pad_token="[PAD]",
-        bos_token="<s>",   
-        eos_token="</s>",  
+        # bos_token="<s>",   ####
+        # eos_token="</s>",  ####
         word_delimiter_token="|" 
     )
     

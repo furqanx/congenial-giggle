@@ -130,21 +130,26 @@ def main(args):
     
 
     # ====================================================
-    # 8. SAVE FINAL MODEL
+    # 8. SAVE FINAL MODEL (HUGGING FACE NATIVE)
     # ====================================================
     print("\n[Main] Training Finished. Saving artifacts...")
     
     final_save_path = os.path.join(output_dir, "final_model")
     os.makedirs(final_save_path, exist_ok=True)
     
-    # Simpan bobot (weights) model murni ala PyTorch
-    torch.save(model.state_dict(), os.path.join(final_save_path, "pytorch_model.bin"))
+    # REVISI: Simpan backbone HuggingFace secara native!
+    # Ini membuat model Anda bisa diload langsung pakai AutoModelForCTC di skrip inference
+    if hasattr(model, 'backbone'):
+        model.backbone.save_pretrained(final_save_path)
+    else:
+        # Fallback jika struktur model berubah
+        torch.save(model.state_dict(), os.path.join(final_save_path, "pytorch_model.bin"))
     
-    # Simpan Processor (HuggingFace Wav2Vec2Processor mendukung save_pretrained secara native)
+    # Simpan Processor
     processor.save_pretrained(final_save_path)
     
-    print(f"✅ Model PyTorch & Processor diamankan di: {final_save_path}")
-    print(f"✅ Gunakan path ini untuk script inference.py nanti.")
+    print(f"✅ Model Hugging Face & Processor diamankan di: {final_save_path}")
+    print(f"✅ Anda bisa langsung meloadnya nanti dengan AutoModelForCTC.from_pretrained('{final_save_path}')")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="ASR Training Script")

@@ -10,6 +10,7 @@ from typing import Any, Dict, List, Union
 
 # Mengimpor senjata rahasia kita
 from src.preprocessing import DynamicNoiseInjector
+from src.processor import normalize_text
 
 # ==========================================
 # 1. DATA COLLATOR (Tukang Packing)
@@ -95,7 +96,9 @@ class ASRDataset(Dataset):
         row = self.data.iloc[idx]
         
         audio_path = row['audio_filepath']
-        transcript = row['text']
+        raw_transcript = row['orthographic_text']
+
+        clean_transcript = normalize_text(raw_transcript)
 
         waveform, sample_rate = torchaudio.load(audio_path)
         
@@ -113,7 +116,7 @@ class ASRDataset(Dataset):
             waveform = self.augmentor(waveform_np=waveform, sample_rate=self.target_sr)
 
         input_values = self.processor(waveform, sampling_rate=self.target_sr).input_values[0]
-        labels = self.processor.tokenizer(transcript).input_ids
+        labels = self.processor.tokenizer(clean_transcript).input_ids
 
         return {
             "input_values": input_values,

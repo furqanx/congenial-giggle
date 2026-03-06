@@ -4,20 +4,17 @@
 
 # --- 1. EXPERIMENT INFO ---
 experiment:
-  project_name : "wavlm-hybrid-asr-v1"
+  project_name : "wavlm-ctc-asr-v1"
   seed         : 42              
   output_dir   : "./logs/experiments"
 
 # --- 2. DATA PIPELINE (Raw Audio + Manifest) ---
 data:
-  # Path diarahkan langsung ke file Colab yang sudah di-remap
-  train_manifest  : "/content/data/processed/train_manifest_colab.jsonl"
-  val_manifest    : "/content/data/processed/val_manifest_colab.jsonl"
-
-  noise_dir       : "content/data/noise"
+  train_manifest  : "data/processed/train_manifest.jsonl"
+  val_manifest    : "data/processed/val_manifest.jsonl"
+  noise_dir       : "data/raw/noise"
   
   sample_rate     : 16000
-  
   # Batch Size DITURUNKAN dari 16 ke 8. 
   # Karena sekarang kita memuat raw audio & WavLM langsung ke GPU, butuh VRAM lebih besar.
   batch_size      : 32
@@ -31,38 +28,27 @@ model:
   # backbone      : "microsoft/wavlm-large"           # Akurasi tinggi, butuh VRAM besar
   # backbone      : "facebook/wav2vec2-large-xlsr-53" # Sangat bagus untuk fonem IPA
   # backbone      : "facebook/hubert-large-ls960-ft"  # Sangat stabil
-  freeze_backbone : False    # Set True di awal jika GPU Colab sering OOM
+  freeze_feature_extractor : True    # Set True di awal jika GPU Colab sering OOM
   
-  # The "Brain" (Encoder)
-  encoder_type    : "bilstm"
-  input_dim       : 768      # Sesuai output WavLM Base
-  hidden_dim      : 512
-  num_enc_layers  : 3
-  
-  # The "Translator" (Decoder)
-  decoder_hidden_dim : 512
-  num_heads       : 8
-  num_dec_layers  : 2
-  
-  # Regularisasi
-  dropout         : 0.1
+  # SpecAugment Configuration (Pertahanan ekstra terhadap noise)
+  mask_time_prob           : 0.05
+  mask_time_length         : 10
+  mask_feature_prob        : 0.05
+  mask_feature_length      : 10
+
+  dropout                  : 0.1
 
 # --- 4. TRAINING HYPERPARAMETERS ---
 train:
-  epochs       : 20
-  # Learning rate diturunkan sedikit (dari 3e-4 ke 1e-4) karena kita sekarang ikut men-training WavLM
-  learning_rate: 1e-4     
-  optimizer    : "adamw"  
-  weight_decay : 0.005    
-  
-  # Kalibrasi Hybrid Loss (30% CTC, 70% Attention)
-  ctc_weight   : 0.3
-
-  fp16: True
+  epochs           : 20
+  learning_rate    : 1e-4     
+  optimizer        : "adamw"  
+  weight_decay     : 0.005    
   
   # Real Batch Size = batch_size (8) * accum_steps (4) = 32
   gradient_accumulation_steps: 4
   
-  device       : "cuda"
-  logging_steps : 100     
-  save_total_limit: 2
+  fp16             : True
+  device           : "cuda"
+  logging_steps    : 100     
+  save_total_limit : 2
