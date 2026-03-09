@@ -62,7 +62,7 @@ class BucketBatchSampler(Sampler):
         # Ambil durasi dari setiap baris data
         self.ind_n_len = []
         for i in range(len(dataset)):
-            self.ind_n_len.append((i, dataset.data.iloc[i]['duration']))
+            self.ind_n_len.append((i, dataset.data.iloc[i]['audio_duration_sec']))
         
         # Urutkan berdasarkan durasi (pendek ke panjang)
         self.ind_n_len.sort(key=lambda x: x[1])
@@ -124,8 +124,8 @@ class ASRDataset(Dataset):
         }
 
 def filter_data(df, min_duration=0.5, max_duration=15.0):
-    if 'duration' in df.columns:
-        return df[(df['duration'] >= min_duration) & (df['duration'] <= max_duration)].reset_index(drop=True)
+    if 'audio_duration_sec' in df.columns:
+        return df[(df['audio_duration_sec'] >= min_duration) & (df['audio_duration_sec'] <= max_duration)].reset_index(drop=True)
     return df
 
 # ==========================================
