@@ -13,6 +13,12 @@ from src.processor import get_processor
 from src.model import build_model
 from src.trainer import ASRTrainer 
 
+import warnings
+
+warnings.filterwarnings("ignore")
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+os.environ['PYTHONWARNINGS'] = 'ignore'
+
 def set_seed(seed):
     """
     Mengatur seed agar hasil eksperimen bisa direproduksi (reproducible).
