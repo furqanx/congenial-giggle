@@ -95,7 +95,7 @@ class ASRDataset(Dataset):
     def __getitem__(self, idx):
         row = self.data.iloc[idx]
         
-        audio_path = row['audio_filepath']
+        audio_path = row['audio_path']
         raw_transcript = row['orthographic_text']
 
         clean_transcript = normalize_text(raw_transcript)

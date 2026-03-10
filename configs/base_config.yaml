@@ -15,8 +15,6 @@ data:
   noise_dir       : "data/raw/noise"
   
   sample_rate     : 16000
-  # Batch Size DITURUNKAN dari 16 ke 8. 
-  # Karena sekarang kita memuat raw audio & WavLM langsung ke GPU, butuh VRAM lebih besar.
   batch_size      : 32
   num_workers     : 8 
   max_duration    : 15.0
@@ -30,7 +28,7 @@ model:
   # backbone      : "facebook/hubert-large-ls960-ft"  # Sangat stabil
   freeze_feature_extractor : True    # Set True di awal jika GPU Colab sering OOM
   
-  # SpecAugment Configuration (Pertahanan ekstra terhadap noise)
+  # SpecAugment configuration 
   mask_time_prob           : 0.05
   mask_time_length         : 10
   mask_feature_prob        : 0.05

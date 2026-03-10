@@ -14,6 +14,12 @@ class ASRTrainer:
         self.config = config
         self.processor = processor
         
+        # --- TAMBAHAN MULTI-GPU 1: Bungkus Model ---
+        if torch.cuda.device_count() > 1:
+            print(f"🔥 Mengaktifkan {torch.cuda.device_count()} GPU dengan DataParallel!")
+            self.model = torch.nn.DataParallel(self.model)
+        # ------------------------------------------
+            
         self.output_dir = os.path.join(config['experiment']['output_dir'], config['experiment']['project_name'])
         os.makedirs(self.output_dir, exist_ok=True)
         
@@ -57,10 +63,15 @@ class ASRTrainer:
             # Autocast untuk Mixed Precision (fp16)
             with torch.amp.autocast(device_type="cuda" if "cuda" in str(self.device) else "cpu", enabled=(self.scaler is not None)):
                 # --- TEMBAK KE MODEL ---
-                # Model akan otomatis menghitung CTC Loss karena kita memberikan argumen 'labels'
                 outputs = self.model(input_values=input_values, labels=labels)
                 
                 loss = outputs["loss"]
+                
+                # --- TAMBAHAN MULTI-GPU 2: Rata-ratakan Loss ---
+                if torch.cuda.device_count() > 1:
+                    loss = loss.mean()
+                # -----------------------------------------------
+                
                 loss = loss / self.accum_steps
 
             # Backward Pass menggunakan Scaler
@@ -120,9 +131,16 @@ class ASRTrainer:
         return metrics
 
     def save_checkpoint(self, epoch, metrics, is_best=False):
+        # --- TAMBAHAN MULTI-GPU 3: Ambil state_dict asli tanpa prefix 'module.' ---
+        if isinstance(self.model, torch.nn.DataParallel):
+            model_state = self.model.module.state_dict()
+        else:
+            model_state = self.model.state_dict()
+        # -------------------------------------------------------------------------
+            
         checkpoint = {
             'epoch': epoch,
-            'model_state_dict': self.model.state_dict(),
+            'model_state_dict': model_state,
             'optimizer_state_dict': self.optimizer.state_dict(),
             'scheduler_state_dict': self.scheduler.state_dict() if self.scheduler else None,
             'metrics': metrics,
